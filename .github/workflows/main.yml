@@ -40,8 +40,17 @@ jobs:
               exit 1
           }
 
-          $u = "toolboxlap"
-          $p = "admin123"
+          $u = "RDP"
+          $p = "1234"
+
+          # 🔓 Relax Windows Password Policy to allow simple passwords like '1234'
+          secedit /export /cfg "$env:TEMP\secpol.cfg" | Out-Null
+          (Get-Content "$env:TEMP\secpol.cfg") `
+            -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' `
+            -replace 'MinimumPasswordLength = \d+', 'MinimumPasswordLength = 0' |
+            Set-Content "$env:TEMP\secpol.cfg"
+          secedit /configure /db "$env:windir\security\local.sdb" /cfg "$env:TEMP\secpol.cfg" /areas SECURITYPOLICY | Out-Null
+          Remove-Item "$env:TEMP\secpol.cfg" -Force
 
           # ⚙️ Core RDP Configuration
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
@@ -66,8 +75,8 @@ jobs:
           Start-Process msiexec.exe -ArgumentList "/i", "`"$env:TEMP\ts.msi`"", "/quiet", "/norestart" -Wait
           Remove-Item "$env:TEMP\ts.msi" -Force
 
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-${{ github.run_number }} --accept-routes
-          
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=good-runner-${{ github.run_number }} --accept-routes
+
           $tsIP = $null; $r = 0
           while (-not $tsIP -and $r -lt 10) {
               $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
@@ -83,8 +92,8 @@ jobs:
           Write-Host "  Password: $p"
           Write-Host "================================================="
 
-          # ⏱️ Protected Runtime Production Loop (5 Hours 40 Minutes)
-          $m = 340
+          # ⏱️ Protected Runtime Production Loop (5 Hours 50 Minutes)
+          $m = 350
           for ($i = 1; $i -le $m; $i++) {
               $l = $m - $i
               Write-Host "[$(Get-Date)] Running: $l min remaining."
@@ -95,7 +104,7 @@ jobs:
           $inputLoops = "${{ github.event.inputs.loops }}"
           $loops = if (-not $inputLoops) { 4 } else { [int]$inputLoops }
           if ($loops -eq 1) { Write-Host "🎯 Chain Finished."; exit 0 }
-          
+
           $next = $loops - 1
           $body = @{
             ref    = "${{ github.ref_name }}"
