@@ -14,7 +14,7 @@ on:
         default: 'false'
         type: string
       ghp_token:
-        description: 'GitHub Token (مثل ghp_... بصلاحية actions:write أو repo) لإطلاق الـ Run التالي'
+        description: 'GitHub Token (مثل ghp_... بصلاحية repo أو actions:write) لإطلاق الـ Run التالي'
         required: false
         default: ''
         type: string
@@ -159,14 +159,19 @@ jobs:
               $token = "${{ github.token }}"
           }
 
-          $uri = "https://api.github.com/repos/${{ github.repository }}/actions/workflows/${{ github.workflow }}/dispatches"
+          $workflowId = "${{ github.workflow }}"
+          $refName = "${{ github.ref_name }}"
+          $uri = "https://api.github.com/repos/${{ github.repository }}/actions/workflows/$([uri]::EscapeDataString($workflowId))/dispatches"
+
+          Write-Host "Dispatching to: $uri on ref: $refName"
+
           $headers = @{
               "Authorization"        = "Bearer $token"
               "Accept"               = "application/vnd.github+json"
               "X-GitHub-Api-Version" = "2022-11-28"
           }
           $body = @{
-              ref = "${{ github.ref_name }}"
+              ref = $refName
               inputs = @{
                   session_minutes = "${{ inputs.session_minutes }}"
                   stop_loop       = "${{ inputs.stop_loop }}"
@@ -180,5 +185,10 @@ jobs:
           }
           catch {
               Write-Warning "Failed to dispatch next run: $($_.Exception.Message)"
-              Write-Warning "Check that your token has 'actions:write' or 'repo' permissions on this repository."
+              if ($_.Exception.Response) {
+                  $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                  $responseBody = $reader.ReadToEnd()
+                  Write-Warning "GitHub API Response: $responseBody"
+              }
+              Write-Warning "Verify: 1) Workflow exists on branch '$refName', 2) Token has 'repo' / 'actions:write' access to '${{ github.repository }}'."
           }
